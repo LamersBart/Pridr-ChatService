@@ -104,17 +104,17 @@ public class ChatHub : Hub
             }
 
             // Lever offline berichten
-            var undeliveredMessages = _messageRepo.GetUndeliveredMessages(userId);
-            Console.WriteLine($"Offline messages: {undeliveredMessages.Count()}");
-
-            foreach (var msg in undeliveredMessages)
-            {
-                await Clients.Caller.SendAsync("ReceiveDirectMessage", msg.SenderId, msg.MessageText, msg.Timestamp);
-            }
-
-            _messageRepo.MarkMessagesAsDelivered(undeliveredMessages);
-            await _messageRepo.SaveChangesAsync();
-            Console.WriteLine($"Delivered offline messages to {userId}.");
+            // var undeliveredMessages = _messageRepo.GetUndeliveredMessages(userId);
+            // Console.WriteLine($"Offline messages: {undeliveredMessages.Count()}");
+            //
+            // foreach (var msg in undeliveredMessages)
+            // {
+            //     await Clients.Caller.SendAsync("ReceiveDirectMessage", msg.SenderId, msg.MessageText, msg.Timestamp);
+            // }
+            //
+            // _messageRepo.MarkMessagesAsDelivered(undeliveredMessages);
+            // await _messageRepo.SaveChangesAsync();
+            // Console.WriteLine($"Delivered offline messages to {userId}.");
 
             await base.OnConnectedAsync();
         }
@@ -160,7 +160,7 @@ public class ChatHub : Hub
 
 
     // Verstuur direct bericht naar een andere gebruiker
-    public async Task SendDirectMessage(string targetUserId, string message)
+    public async Task SendDirectMessage(string targetUserId, string targetUserName, string senderUserName, string message)
     {
         try
         {
@@ -187,8 +187,10 @@ public class ChatHub : Hub
                 SenderId = senderUserId,
                 ReceiverId = targetUserId,
                 MessageText = message,
+                SenderUserName = senderUserName,
+                ReceiverUserName = targetUserName,
                 Timestamp = now,
-                IsDelivered = targetConnection != null // True als ontvanger online is, anders false
+                IsDelivered = targetConnection != null  // True als ontvanger online is, anders false
             };
 
             // Sla het bericht op in de database (altijd!)

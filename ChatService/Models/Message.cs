@@ -8,6 +8,8 @@ public class Message
     public required string SenderId { get; set; } // Vereist bij aanmaken
     public required string ReceiverId { get; set; } // Vereist bij aanmaken
     public required string MessageText { get; set; } // Vereist bij aanmaken
+    public required string SenderUserName { get; set; } // Vereist bij aanmaken
+    public required string ReceiverUserName { get; set; } // Vereist bij aanmaken
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public bool IsDelivered { get; set; } = false;
 }

@@ -30,6 +30,16 @@ public class AppDbContext :DbContext
                 .HasColumnType("text");
             entity.Property(e => e.MessageText)
                 .HasConversion(new EncryptedReferenceConverter<string>());
+            
+            entity.Property(e => e.SenderUserName)
+                .HasColumnType("text");
+            entity.Property(e => e.SenderUserName)
+                .HasConversion(new EncryptedReferenceConverter<string>());
+            
+            entity.Property(e => e.ReceiverUserName)
+                .HasColumnType("text");
+            entity.Property(e => e.ReceiverUserName)
+                .HasConversion(new EncryptedReferenceConverter<string>());
         });
     }
 }
