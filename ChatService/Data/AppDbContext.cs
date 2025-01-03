@@ -11,6 +11,8 @@ public class AppDbContext :DbContext
     
     public DbSet<Connection> Connections { get; set; }
     public DbSet<Message> Messages { get; set; }
+    
+    public DbSet<Username> Usernames { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -18,6 +20,20 @@ public class AppDbContext :DbContext
             .Property(c => c.ConnectedAt)
             .HasColumnType("timestamp with time zone") // PostgreSQL vereist UTC
             .HasDefaultValueSql("now() at time zone 'utc'");
+        
+        modelBuilder.Entity<Message>()
+            .HasOne<Username>()
+            .WithMany()
+            .HasForeignKey(m => m.SenderId)
+            .HasPrincipalKey(u => u.KeycloakId);
+
+        modelBuilder.Entity<Message>()
+            .HasOne<Username>()
+            .WithMany()
+            .HasForeignKey(m => m.ReceiverId)
+            .HasPrincipalKey(u => u.KeycloakId);
+
+        
         modelBuilder.Entity<Message>(entity =>
         {
             entity.Property(e => e.SenderId)
@@ -30,15 +46,15 @@ public class AppDbContext :DbContext
                 .HasColumnType("text");
             entity.Property(e => e.MessageText)
                 .HasConversion(new EncryptedReferenceConverter<string>());
-            
-            entity.Property(e => e.SenderUserName)
+        });
+        modelBuilder.Entity<Username>(entity =>
+        {
+            entity.Property(e => e.KeycloakId)
                 .HasColumnType("text");
-            entity.Property(e => e.SenderUserName)
-                .HasConversion(new EncryptedReferenceConverter<string>());
             
-            entity.Property(e => e.ReceiverUserName)
+            entity.Property(e => e.UserName)
                 .HasColumnType("text");
-            entity.Property(e => e.ReceiverUserName)
+            entity.Property(e => e.UserName)
                 .HasConversion(new EncryptedReferenceConverter<string>());
         });
     }

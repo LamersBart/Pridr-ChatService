@@ -88,33 +88,38 @@ public class ChatHub : Hub
             }
 
             Console.WriteLine($"User ID: {userId}");
-
-            if (!_connectionRepo.ConnectionExists(Context.ConnectionId))
+            
+            var existingConnections = _connectionRepo.GetConnectionByUserId(userId);
+            foreach (var conn in existingConnections)
             {
-                var connection = new Connection
-                {
-                    ConnectionId = Context.ConnectionId,
-                    UserId = userId,
-                    ConnectedAt = DateTime.UtcNow
-                };
-                _connectionRepo.CreateConnection(connection);
-
-                await _connectionRepo.SaveChangesAsync();
-                Console.WriteLine($"Connection saved for {userId}.");
+                _connectionRepo.DeleteConnection(conn.ConnectionId);
             }
+            await _connectionRepo.SaveChangesAsync();
+            Console.WriteLine($"Removed old connections for {userId}.");
+
+            // Registreer de nieuwe connectie
+            var connection = new Connection
+            {
+                ConnectionId = Context.ConnectionId,
+                UserId = userId,
+                ConnectedAt = DateTime.UtcNow
+            };
+            _connectionRepo.CreateConnection(connection);
+            await _connectionRepo.SaveChangesAsync();
+            Console.WriteLine($"Connection saved for {userId}.");
 
             // Lever offline berichten
-            // var undeliveredMessages = _messageRepo.GetUndeliveredMessages(userId);
-            // Console.WriteLine($"Offline messages: {undeliveredMessages.Count()}");
-            //
-            // foreach (var msg in undeliveredMessages)
-            // {
-            //     await Clients.Caller.SendAsync("ReceiveDirectMessage", msg.SenderId, msg.MessageText, msg.Timestamp);
-            // }
-            //
-            // _messageRepo.MarkMessagesAsDelivered(undeliveredMessages);
-            // await _messageRepo.SaveChangesAsync();
-            // Console.WriteLine($"Delivered offline messages to {userId}.");
+            var undeliveredMessages = _messageRepo.GetUndeliveredMessages(userId);
+            Console.WriteLine($"Offline messages: {undeliveredMessages.Count()}");
+            
+            foreach (var msg in undeliveredMessages)
+            {
+                await Clients.Caller.SendAsync("ReceiveDirectMessage", msg.SenderId, msg.MessageText, msg.Timestamp);
+            }
+            
+            _messageRepo.MarkMessagesAsDelivered(undeliveredMessages);
+            await _messageRepo.SaveChangesAsync();
+            Console.WriteLine($"Delivered offline messages to {userId}.");
 
             await base.OnConnectedAsync();
         }
@@ -160,7 +165,7 @@ public class ChatHub : Hub
 
 
     // Verstuur direct bericht naar een andere gebruiker
-    public async Task SendDirectMessage(string targetUserId, string targetUserName, string senderUserName, string message)
+    public async Task SendDirectMessage(string targetUserId, string message)
     {
         try
         {
@@ -177,7 +182,10 @@ public class ChatHub : Hub
             }
 
             // Controleer of de ontvanger online is
-            var targetConnection = _connectionRepo.GetTargetConnectionById(targetUserId);
+            // var targetConnection = _connectionRepo.GetTargetConnectionById(targetUserId);
+            var targetConnection = _connectionRepo.GetConnectionByUserId(targetUserId)
+                .OrderByDescending(c => c.ConnectedAt) // Haal de nieuwste connectie op
+                .FirstOrDefault();
             Console.WriteLine($"Target Connection: {targetConnection?.ConnectionId}");
 
             DateTime now = DateTime.UtcNow;
@@ -187,8 +195,6 @@ public class ChatHub : Hub
                 SenderId = senderUserId,
                 ReceiverId = targetUserId,
                 MessageText = message,
-                SenderUserName = senderUserName,
-                ReceiverUserName = targetUserName,
                 Timestamp = now,
                 IsDelivered = targetConnection != null  // True als ontvanger online is, anders false
             };
@@ -226,14 +232,17 @@ public class ChatHub : Hub
         Console.WriteLine($"OnDisconnectedAsync called for {Context.ConnectionId}. Reason: {exception?.Message}");
         try
         {
-            var connection = _connectionRepo.GetConnectionById(Context.ConnectionId);
-            if (connection != null)
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userId))
             {
-                _connectionRepo.DeleteConnection(Context.ConnectionId);
+                var connections = _connectionRepo.GetConnectionByUserId(userId);
+                foreach (var conn in connections)
+                {
+                    _connectionRepo.DeleteConnection(conn.ConnectionId);
+                }
                 await _connectionRepo.SaveChangesAsync();
-                Console.WriteLine($"Connection {Context.ConnectionId} removed.");
+                Console.WriteLine($"Removed all connections for user {userId}.");
             }
-
             await base.OnDisconnectedAsync(exception);
         }
         catch (Exception ex)

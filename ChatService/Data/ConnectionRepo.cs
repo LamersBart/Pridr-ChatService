@@ -30,6 +30,11 @@ public class ConnectionRepo : IConnectionRepo
         return _context.Connections.FirstOrDefault(p => p.ConnectionId == connectionId)!;
     }
 
+    public IEnumerable<Connection> GetConnectionByUserId(string userId)
+    {
+        return _context.Connections.Where(p => p.UserId == userId).ToList();
+    }
+
     public Connection? GetTargetConnectionById(string targetUserId)
     {
         var result = _context.Connections.FirstOrDefault(c => c.UserId == targetUserId);
@@ -48,6 +53,6 @@ public class ConnectionRepo : IConnectionRepo
 
     public bool ConnectionExists(string connectionId)
     {
-        return _context.Connections.Any(p => p.ConnectionId == connectionId);
+        return _context.Connections.Any(p => p.UserId == connectionId);
     }
 }

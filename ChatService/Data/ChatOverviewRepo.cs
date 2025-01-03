@@ -20,6 +20,17 @@ public class ChatOverviewRepo : IChatOverviewRepo
             .Where(m => m.SenderId == userId || m.ReceiverId == userId)
             .ToList();
 
+        // Haal alle unieke gesprekspartners op
+        var partnerIds = messages
+            .Select(m => m.SenderId == userId ? m.ReceiverId : m.SenderId)
+            .Distinct()
+            .ToList();
+
+        // Haal alle gebruikersnamen op van de gesprekspartners
+        var usernames = _context.Usernames
+            .Where(u => partnerIds.Contains(u.KeycloakId))
+            .ToDictionary(u => u.KeycloakId, u => u.UserName);
+
         // Groepeer berichten op gesprekspartner
         var chats = messages
             .GroupBy(m => m.SenderId == userId ? m.ReceiverId : m.SenderId) // Groepeer op de gesprekspartner
@@ -30,13 +41,15 @@ public class ChatOverviewRepo : IChatOverviewRepo
 
                 // Bepaal gesprekspartner op basis van ingelogde gebruiker
                 var partnerId = lastMessage.SenderId == userId ? lastMessage.ReceiverId : lastMessage.SenderId;
-                var partnerName = lastMessage.SenderId == userId ? lastMessage.ReceiverUserName : lastMessage.SenderUserName;
+
+                // Zoek de gebruikersnaam van de partner op
+                var partnerName = usernames.ContainsKey(partnerId) ? usernames[partnerId] : "Onbekend";
 
                 // Bouw ChatOverview object
                 return new ChatOverview
                 {
-                    SenderId = partnerId, // ID van de gesprekspartner
-                    SenderUserName = partnerName, // Naam van de gesprekspartner
+                    PartnerId = partnerId, // ID van de gesprekspartner
+                    PartnerUserName = partnerName, // Naam van de gesprekspartner
                     LastMessage = lastMessage.MessageText, // Tekst van het laatste bericht
                     LastMessageTimestamp = lastMessage.Timestamp // Tijdstip van het laatste bericht
                 };
@@ -46,5 +59,4 @@ public class ChatOverviewRepo : IChatOverviewRepo
 
         return chats; // Geef de lijst terug
     }
-
 }

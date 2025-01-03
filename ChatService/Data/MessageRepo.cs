@@ -1,5 +1,6 @@
 using ChatService.Data.Encryption;
 using ChatService.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatService.Data;
 
@@ -15,6 +16,11 @@ public class MessageRepo : IMessageRepo
     public void SaveMessage(Message message)
     {
         _context.Messages.Add(message);
+    }
+
+    public void UpdateMessage(Message message)
+    {
+        _context.Messages.Update(message);
     }
 
     public IEnumerable<Message> GetUndeliveredMessages(string userId)
@@ -44,5 +50,18 @@ public class MessageRepo : IMessageRepo
     public async Task<bool> SaveChangesAsync()
     {
         return await _context.SaveChangesAsync() >= 0;
+    }
+
+    public bool MessagesExists(string keycloakUserId)
+    {
+        return _context.Messages.Any(m => m.SenderId == keycloakUserId || m.ReceiverId == keycloakUserId);
+    }
+    
+    public async Task BulkUpdateMessagesFromUserAsync(string keycloakUserId, string text)
+    {
+        await _context.Messages
+            .Where(m => m.SenderId == keycloakUserId)
+            .ExecuteUpdateAsync(m => m
+                .SetProperty(p => p.MessageText, text));
     }
 }
