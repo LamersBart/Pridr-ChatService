@@ -3,23 +3,33 @@ using ChatService.Data;
 using ChatService.Data.Encryption;
 using ChatService.EventProcessing;
 using ChatService.Hubs;
+using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var environment = builder.Environment;
+if (environment.IsDevelopment())
+{
+    Console.WriteLine("Loading .env file in Development environment...");
+    Env.Load();
+}
+builder.Configuration.AddEnvironmentVariables();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
         o.RequireHttpsMetadata = false;
-        o.Audience = builder.Configuration["Authentication:Audience"];
-        o.MetadataAddress = builder.Configuration["Authentication:MetadataAddress"]!;
+        o.Audience = Environment.GetEnvironmentVariable("AUTH_AUDIENCE");
+        o.MetadataAddress = Environment.GetEnvironmentVariable("AUTH_METADATA")!;
         o.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidIssuer = builder.Configuration["Authentication:ValidIssuer"],
+            ValidIssuer = Environment.GetEnvironmentVariable("AUTH_ISSUER"),
         };
         // Ondersteuning voor SignalR WebSocket-verbindingen
         o.Events = new JwtBearerEvents
@@ -87,7 +97,7 @@ builder.Services.AddSwaggerGen(o =>
         {
             Implicit = new OpenApiOAuthFlow
             {
-                AuthorizationUrl = new Uri(builder.Configuration["Keycloak:AuthorizationUrl"]!),
+                AuthorizationUrl = new Uri(Environment.GetEnvironmentVariable("KEYCLOAK_URL")!),
                 Scopes = new Dictionary<string, string>
                 {
                     {"openid", "openid"},
@@ -116,11 +126,19 @@ builder.Services.AddSwaggerGen(o =>
     o.SwaggerDoc("v1", info);
     o.AddSecurityRequirement(securityRequirement);
 });
-
+var connectionStringBuilder = new NpgsqlConnectionStringBuilder
+{
+    Host = Environment.GetEnvironmentVariable("PGHOST"),
+    Port = int.Parse(Environment.GetEnvironmentVariable("PGPORT") ?? "5432"),
+    Database = Environment.GetEnvironmentVariable("PGDB"),
+    Username = Environment.GetEnvironmentVariable("PGUSER"),
+    Password = Environment.GetEnvironmentVariable("PGPASS")
+};
+var connectionString = connectionStringBuilder.ConnectionString;
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     Console.WriteLine("Using in Postgres DB");
-    options.UseNpgsql(builder.Configuration.GetConnectionString("PostgresConnection"));
+    options.UseNpgsql(connectionString);
 });
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddScoped<IChatOverviewRepo, ChatOverviewRepo>();
@@ -131,7 +149,7 @@ builder.Services.AddSingleton<IEventProcessor, EventProcessor>();
 builder.Services.AddHostedService<MessageBusSubscriber>();
 builder.Services.AddSignalR();
 builder.Services.AddControllers();
-EncryptionHelper.Initialize(builder.Configuration);
+EncryptionHelper.Initialize();
 
 var app = builder.Build();
 
@@ -145,6 +163,7 @@ app.UseSwagger();
 app.UseSwaggerUI(o => o.EnableTryItOutByDefault());
 app.UseHttpsRedirection();
 app.UseCors(corsConfig);
+PrepDb.PrepPopulation(app, environment.IsProduction());
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

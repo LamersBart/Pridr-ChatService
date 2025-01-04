@@ -7,15 +7,13 @@ namespace ChatService.AsyncDataServices;
 
 public class MessageBusSubscriber : BackgroundService
 {
-    private readonly IConfiguration _configuration;
     private readonly IEventProcessor _eventProcessor;
     private IConnection? _connection;
     private IModel? _channel;
     private string? _queueName;
 
-    public MessageBusSubscriber(IConfiguration configuration, IEventProcessor eventProcessor)
+    public MessageBusSubscriber(IEventProcessor eventProcessor)
     {
-        _configuration = configuration;
         _eventProcessor = eventProcessor;
         InitiliazeRabbitMQ();
     }
@@ -24,8 +22,8 @@ public class MessageBusSubscriber : BackgroundService
     {
         var factory = new ConnectionFactory()
         {
-            HostName = _configuration["RabbitMQHost"],
-            Port = int.Parse(_configuration["RabbitMQPort"]!),
+            HostName = Environment.GetEnvironmentVariable("MQHOST"),
+            Port = int.Parse(Environment.GetEnvironmentVariable("MQPORT")!),
             ClientProvidedName = "ChatService",
         };
         _connection = factory.CreateConnection();
