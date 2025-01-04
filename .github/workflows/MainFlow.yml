@@ -1,13 +1,9 @@
-name: SonarQube
+name: Main Flow
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    types: [opened, synchronize, reopened]
+  [workflow_dispatch]
 jobs:
-  build:
-    name: Build and analyze
+  scan:
+    name: SonarQube scan
     runs-on: windows-latest
     steps:
       - name: Set up JDK 17
@@ -46,3 +42,39 @@ jobs:
           .\.sonar\scanner\dotnet-sonarscanner begin /k:"LamersBart_Pridr-ChatService" /o:"lamersdev" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io"
           dotnet build
           .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+  
+  qualitiy:
+    name: Qualitiy gate check
+    needs: scan 
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Quality Gate Check
+        run: |
+          RESPONSE=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: \
+          "https://sonarcloud.io/api/qualitygates/project_status?projectKey=LamersBart_Pridr-ChatService")
+          echo "SonarCloud API Response: $RESPONSE"
+          STATUS=$(echo $RESPONSE | jq -r .projectStatus.status)
+          echo "Quality Gate Status: $STATUS"
+          if [ "$STATUS" != "OK" ]; then
+              echo "Quality Gate failed!"
+              exit 1
+          fi
+  build:
+    name: Build and push docker image
+    needs: [scan, qualitiy]
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set dynamic TAG variable
+      id: set_tag
+      run: echo "TAG=$(date +%s)" >> $GITHUB_ENV
+      
+    - name: Log in to Docker Hub
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+    
+    - name: Build the Docker image
+      run: docker build ./ChatService --file ./ChatService/Dockerfile -t lamersbart/pridr-chatservice:$TAG
+      
+    - name: push image to hub
+      run: docker push lamersbart/pridr-chatservice:$TAG
