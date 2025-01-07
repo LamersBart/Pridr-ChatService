@@ -11,7 +11,6 @@ public class AppDbContext :DbContext
     
     public DbSet<Connection> Connections { get; set; }
     public DbSet<Message> Messages { get; set; }
-    
     public DbSet<Username> Usernames { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -32,7 +31,6 @@ public class AppDbContext :DbContext
             .WithMany()
             .HasForeignKey(m => m.ReceiverId)
             .HasPrincipalKey(u => u.KeycloakId);
-
         
         modelBuilder.Entity<Message>(entity =>
         {
@@ -47,6 +45,7 @@ public class AppDbContext :DbContext
             entity.Property(e => e.MessageText)
                 .HasConversion(new EncryptedReferenceConverter<string>());
         });
+        
         modelBuilder.Entity<Username>(entity =>
         {
             entity.Property(e => e.KeycloakId)

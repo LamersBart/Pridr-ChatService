@@ -51,21 +51,6 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-var  corsConfig = "_corsConfig";
-builder.Services.AddCors(o =>
-{
-    o.AddPolicy("_corsConfig", policy =>
-    {
-        policy.WithOrigins("http://localhost:5195, https://localhost:7184")
-            .AllowAnyMethod()
-            .AllowAnyHeader();
-        
-        policy.WithOrigins("http://localhost:5173")
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-    });
-});
 var contact = new OpenApiContact
 {
     Name = "Bart Lamers",
@@ -149,23 +134,30 @@ builder.Services.AddSingleton<IEventProcessor, EventProcessor>();
 builder.Services.AddHostedService<MessageBusSubscriber>();
 builder.Services.AddSignalR();
 builder.Services.AddControllers();
+builder.Services.AddCors(opt =>
+{
+    opt.AddPolicy("reactApp", p =>
+    {
+        p.WithOrigins("https://demo.pridr.app")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 EncryptionHelper.Initialize();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(o => o.EnableTryItOutByDefault());
 }
-app.UseSwagger();
-app.UseSwaggerUI(o => o.EnableTryItOutByDefault());
+await PrepDb.PrepPopulation(app, environment.IsProduction());
 app.UseHttpsRedirection();
-app.UseCors(corsConfig);
-PrepDb.PrepPopulation(app, environment.IsProduction());
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/api/v1/chat");
+app.UseCors("reactApp");
 app.Run();
