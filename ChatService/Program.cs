@@ -132,10 +132,7 @@ builder.Services.AddScoped<IMessageRepo, MessageRepo>();
 builder.Services.AddScoped<IUsernameRepo, UsernameRepo>();
 builder.Services.AddSingleton<IEventProcessor, EventProcessor>();
 builder.Services.AddHostedService<MessageBusSubscriber>();
-builder.Services.AddSignalR()
-    .AddStackExchangeRedis($"{Environment.GetEnvironmentVariable("REDISHOST")}:{Environment.GetEnvironmentVariable("REDISPORT")}", options => {
-    options.Configuration.ChannelPrefix = "SignalR";
-});
+builder.Services.AddSignalR();
 builder.Services.AddControllers();
 builder.Services.AddCors(opt =>
 {
