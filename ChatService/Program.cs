@@ -132,7 +132,10 @@ builder.Services.AddScoped<IMessageRepo, MessageRepo>();
 builder.Services.AddScoped<IUsernameRepo, UsernameRepo>();
 builder.Services.AddSingleton<IEventProcessor, EventProcessor>();
 builder.Services.AddHostedService<MessageBusSubscriber>();
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    .AddStackExchangeRedis($"{Environment.GetEnvironmentVariable("REDISHOST")}:{Environment.GetEnvironmentVariable("REDISPORT")}", options => {
+    options.Configuration.ChannelPrefix = "SignalR";
+});
 builder.Services.AddControllers();
 builder.Services.AddCors(opt =>
 {
@@ -163,7 +166,7 @@ if (app.Environment.IsDevelopment()) {
     app.UseHttpsRedirection();
     app.UseCors("reactApp");
 }
-await PrepDb.PrepPopulation(app, environment.IsProduction());
+await PrepDb.PrepPopulation(app, true);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

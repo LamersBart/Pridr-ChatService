@@ -169,11 +169,9 @@ public class ChatHub : Hub
     {
         try
         {
-            Console.WriteLine($"SendDirectMessage: Sender={Context.ConnectionId}, Target={targetUserId}, Message={message}");
-
             // Haal de afzender-ID op
             var senderUserId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
+            Console.WriteLine($"SendDirectMessage: Sender={senderUserId}, Target={targetUserId}, Message={message}");
             if (string.IsNullOrEmpty(senderUserId))
             {
                 Console.WriteLine("Sender ID is null.");
