@@ -1,9 +1,31 @@
 name: Main Flow
 on:
-  [workflow_dispatch]
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
 jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0'
+          
+      - name: Restore dependencies
+        run: dotnet restore ./ChatService/ChatService.csproj
+        
+      - name: Build solution
+        run: dotnet build ./ChatService/ChatService.csproj --no-restore --configuration Release
+        
   scan:
     name: SonarQube scan
+    needs: [build]
     runs-on: windows-latest
     steps:
       - name: Set up JDK 17
@@ -45,7 +67,7 @@ jobs:
   
   qualitiy:
     name: Qualitiy gate check
-    needs: scan 
+    needs: [build, scan] 
     runs-on: ubuntu-22.04
     steps:
       - name: Quality Gate Check
@@ -59,9 +81,11 @@ jobs:
               echo "Quality Gate failed!"
               exit 1
           fi
-  build:
+        continue-on-error: true
+  
+  docker-image:
     name: Build and push docker image
-    needs: [scan, qualitiy]
+    needs: [build, scan]
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
@@ -74,3 +98,100 @@ jobs:
       
     - name: push image to hub
       run: docker push lamersbart/pridr-chatservice:latest
+
+  integration-tests:
+    name: Trigger Integration Tests
+    needs: [build, scan, docker-image]
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Trigger Integration Tests Workflow
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        id: trigger-workflow
+        run: |
+          echo "Starten van de integration test workflow in repo Y..."
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: Bearer $PAT_TOKEN" \
+            https://api.github.com/repos/LamersBart/Pridr-IntergrationTest/actions/workflows/137682142/dispatches \
+            -d '{"ref":"main"}'
+
+          echo "Wachten op registratie van workflow run..."
+          sleep 10
+
+          response=$(curl -s \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: Bearer $PAT_TOKEN" \
+            https://api.github.com/repos/LamersBart/Pridr-IntergrationTest/actions/runs?branch=main&per_page=1)
+
+          run_id=$(echo "$response" | jq -r '.workflow_runs[0].id')
+          if [ -z "$run_id" ] || [ "$run_id" == "null" ]; then
+            echo "Fout: Geen geldige workflow-run ID gevonden!"
+            exit 1
+          fi
+
+          echo "Workflow-run ID is: $run_id"
+          echo "run_id=$run_id" >> $GITHUB_ENV
+
+      - name: Controleer geladen run_id
+        run: |
+          if [ -z "${{ env.run_id }}" ]; then
+            echo "Fout: run_id is niet geladen!"
+            exit 1
+          else
+            echo "run_id geladen: ${{ env.run_id }}"
+          fi
+
+      - name: Wait for Integration Test Completion
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          run_id: ${{ env.run_id }}
+        run: |
+          if [ -z "${{ env.run_id }}" ]; then
+            echo "Fout: run_id is niet ingesteld!"
+            exit 1
+          fi
+
+          echo "Controleren van workflow-run met ID: ${{ env.run_id }}..."
+
+          # Functie om met een wachttijd te blijven checken
+          check_workflow_status() {
+            local attempts=0
+            local max_attempts=30
+            local delay=10
+
+            while [ $attempts -lt $max_attempts ]; do
+              echo "Poging $((attempts + 1)) van $max_attempts om de status op te halen..."
+
+              response=$(curl -s \
+                -H "Accept: application/vnd.github.v3+json" \
+                -H "Authorization: Bearer $PAT_TOKEN" \
+                "https://api.github.com/repos/LamersBart/Pridr-IntergrationTest/actions/runs/${{ env.run_id }}")
+
+              status=$(echo "$response" | jq -r '.status')
+              conclusion=$(echo "$response" | jq -r '.conclusion')
+
+              if [ "$status" = "completed" ]; then
+                if [ "$conclusion" = "success" ]; then
+                  echo "Workflow succesvol voltooid!"
+                  return 0
+                else
+                  echo "Workflow mislukt met conclusie: $conclusion"
+                  exit 1
+                fi
+              fi
+
+              echo "Workflow nog bezig. Wachten $delay seconden..."
+              sleep $delay
+              attempts=$((attempts + 1))
+            done
+
+            echo "Workflow niet voltooid binnen de maximale wachttijd!"
+            exit 1
+          }
+
+          # Start controle
+          check_workflow_status
