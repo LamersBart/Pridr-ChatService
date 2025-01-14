@@ -69,7 +69,7 @@ public class EventProcessor : IEventProcessor
         }
         catch (JsonException ex)
         {
-            Console.WriteLine("--> Not a Keycloak event, trying UserService event.");
+            Console.WriteLine($"--> Not a Keycloak event, trying UserService event. {ex.Message}");
         }
         
         try
@@ -81,9 +81,9 @@ public class EventProcessor : IEventProcessor
                 return EventType.UpdatedUsername;
             }
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            Console.WriteLine("--> Could not determine event type.");
+            Console.WriteLine($"--> Could not determine event type. {ex.Message}");
         }
         Console.WriteLine("--> Received Event is 'Undetermined'");
         return EventType.Undetermined;
